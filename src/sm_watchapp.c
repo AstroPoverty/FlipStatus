@@ -492,7 +492,7 @@ void set_moon_data() {
 	int moonPhase = get_moon_phase(mDays);
 	setMoonImage(moonPhase);
 	moon_icons[MOON_CURRENT] = moonPhase;
-	text_layer_set_text(moon_phase_layer, moon_phase_names[MOON_CURRENT]);
+	text_layer_set_text(moon_phase_layer, moon_phase_names[moonPhase]);
 }
 
 void format_and_set_moon_date(time_t tt) {
