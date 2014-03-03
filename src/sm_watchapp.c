@@ -1466,7 +1466,7 @@ static void init(void) {
 	text_weather_wind_label_layer = text_layer_create(GRect(93, 1, 144 - 91, 28));
 	text_layer_setup(animated_layer[WEATHER_LAYER2], text_weather_wind_label_layer, GTextAlignmentCenter, textColor, FONT_KEY_GOTHIC_18_BOLD, "Wind");
 	
-	text_weather_wind_layer = text_layer_create(GRect(78, 18, 144 - 78, 28));
+	text_weather_wind_layer = text_layer_create(GRect(76, 18, 144 - 76, 28));
 	text_layer_setup(animated_layer[WEATHER_LAYER2], text_weather_wind_layer, GTextAlignmentCenter, textColor, FONT_KEY_GOTHIC_18, "-");
 	
 	//---------------------------------------------------------------------------
