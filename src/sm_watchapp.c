@@ -1151,11 +1151,11 @@ static void up_long_click_handler(ClickRecognizerRef recognizer, void *context) 
 	} else {
 		text_layer_set_text(text_weather_cond_layer, updating_str);
 		text_layer_set_text(text_weather_wind_layer, updating_str);
-		text_layer_set_text(moon_text_layer, updating_str);
 		text_layer_set_text(calendar_date_layer1, updating_str);
 		text_layer_set_text(calendar_date_layer2, updating_str);
 		set_info_text_with_timer(updating_str, date_switchback_short);
 		set_timer_for_date_recovery(date_switchback_short);
+		set_moon_data();
 		data_update_and_refresh();
 	}
 }
