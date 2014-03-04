@@ -32,6 +32,14 @@ static char *default_cal_names[] = { "No Upcoming", "Appointment" };
 
 static int active_layer = 0;
 static int active_status_layer = 0;
+static bool response_mode_active = false;
+
+static int prev_sms_count = -1;
+static int prev_call_count = -1;
+static int prev_active_layer = -1;
+static bool next_msg_has_call_sms = false;
+static int response_mode_timeout = 90000; // 90 sec
+
 static const int NEXT_ITEM = -1;
 static const int MIDDLE_LAYERS = 0;
 static const int BOTTOM_LAYERS = 1;
@@ -56,6 +64,7 @@ static int last_weather_img_set = 0;
 static int last_humidity_img_set = HUM_50;
 
 static AppTimer* dateRecoveryTimer = NULL;
+static AppTimer* responseModeTimer = NULL;
 static int date_switchback_short = 2000;
 static int date_switchback_long = 5000;
 
@@ -95,6 +104,7 @@ static int moon_icons[NUM_MOON_MODES-1];
 static char calendar_text_str[NUM_APPT_MODES][CAL_TEXT_STRING_LENGTH], calendar_date_str[NUM_APPT_MODES][DATE_STRING_LENGTH];
 static char old_date_str[DATE_STRING_LENGTH];
 static char music_artist_str[MUSIC_TEXT_STRING_LENGTH], music_title_str[MUSIC_TEXT_STRING_LENGTH];
+static char response_mode_top_str[MUSIC_TEXT_STRING_LENGTH], response_mode_bottom_str[MUSIC_TEXT_STRING_LENGTH];
 
 static bool color_mode_normal = true;
 
@@ -188,9 +198,12 @@ const int MOON_IMG_INV_IDS[] = {
 };
 
 // Prototypes
+static void set_info_text_with_timer(char *, int);
+static void transition_main_layer(int);
 static void handle_calendar_mode_click(int);
 static void handle_calendar_status_mode_click(int);
 void set_moon_data();
+void dismiss_response_mode();
 static void deinit();
 static void init();
 
@@ -321,7 +334,8 @@ void data_update_and_refresh() {
 	// vals will in turn send out a normal SS messgae for update.  You can't send two at the same time,
 	// so this is hopefully a temporary hack.
 	sendCommandInt(SM_SCREEN_ENTER_KEY, WEATHER_APP);
-	
+	//sendCommandInt(SM_SCREEN_ENTER_KEY, MESSAGES_APP);
+	//APP_LOG(APP_LOG_LEVEL_DEBUG, "MESSAGES_APP SENT...");
 }
 
 
@@ -334,7 +348,9 @@ void handle_minute_tick(struct tm *tick_time, TimeUnits units_changed) {
 
 	// TODO: Only update the date when it's changed.
 	strftime(date_text, sizeof(date_text), "%a, %b %e", tick_time);
-	text_layer_set_text(text_date_layer, date_text);
+	
+	if (!response_mode_active)
+		text_layer_set_text(text_date_layer, date_text);
 
 
 	if (clock_is_24h_style()) {
@@ -579,6 +595,12 @@ void setWindImage() {
 	bitmap_layer_set_bitmap(wind_image, current_wind_image);
 }
 
+static void activate_response_mode() {
+	prev_active_layer = active_layer;
+	next_msg_has_call_sms = true;
+	response_mode_active = true;
+	sendCommandInt(SM_SCREEN_ENTER_KEY, MESSAGES_APP);
+}
 
 //======================================================================================================
 // RECEIVE FUNCTIONS
@@ -752,16 +774,39 @@ static void rcv(DictionaryIterator *received, void *context) {
 		
 		sendCommandInt(SM_SCREEN_ENTER_KEY, CALENDAR_APP);
 	}
+	
+	
+	//t = dict_find(received, SM_MESSAGES_UPDATE_KEY);
+	//if (t != NULL) {
+	//	APP_LOG(APP_LOG_LEVEL_DEBUG, "SM_MESSAGES_UPDATE_KEY VALID");
+	//}
+	
+	t = dict_find(received, SM_CALL_SMS_UPDATE_KEY);
+	if (t != NULL) {
+		APP_LOG(APP_LOG_LEVEL_DEBUG, "SM_CALL_SMS_UPDATE_KEY VALID");
+	}
+	
+	//t = dict_find(received, SM_CALL_SMS_KEY);
+	//if (t != NULL) {
+	//	APP_LOG(APP_LOG_LEVEL_DEBUG, "SM_CALL_SMS_KEY VALID");
+//	}
+	
+	
 
 	t = dict_find(received, SM_CALENDAR_UPDATE_KEY);
 	if (t != NULL) {
-		//APP_LOG(APP_LOG_LEVEL_DEBUG, "SM_CALENDAR_UPDATE_KEY VALID");
+		APP_LOG(APP_LOG_LEVEL_DEBUG, "CAL_KEY VALID");
 		uint8_t number_entries = t->value->data[0];
 		uint8_t position = 0;
 		uint8_t title_subtitle = 0;
 		uint8_t len = 0;
 		uint8_t copylen = 0;
+		
+		uint8_t iterCnt = NUM_APPT_MODES;
 		int j = 1;
+		
+		if (next_msg_has_call_sms)
+			iterCnt = 1;
 
 		while (j < t->length) {
 			position = t->value->data[j++];
@@ -769,41 +814,67 @@ static void rcv(DictionaryIterator *received, void *context) {
 			len = t->value->data[j++];
 			copylen = len;
 
-			if (position < NUM_APPT_MODES) {
-				if (title_subtitle == 0) {
-					if (copylen > CAL_TEXT_STRING_LENGTH-2) {
-						copylen = CAL_TEXT_STRING_LENGTH-2;
+			if (position < iterCnt) {
+				if (next_msg_has_call_sms) {
+					if (title_subtitle == 0) {
+						if (copylen > MUSIC_TEXT_STRING_LENGTH-2) {
+							copylen = MUSIC_TEXT_STRING_LENGTH-2;
+						}
+						memcpy(response_mode_bottom_str,&t->value->data[j], copylen);
+						response_mode_bottom_str[copylen] = '\0';
+						text_layer_set_text(music_artist_layer, response_mode_bottom_str);
+					} else {
+						if (copylen > MUSIC_TEXT_STRING_LENGTH-2) {
+							copylen = MUSIC_TEXT_STRING_LENGTH-2;
+						}
+						memcpy(response_mode_top_str, &t->value->data[j], copylen);
+						response_mode_top_str[copylen] = '\0';
+						text_layer_set_text(music_song_layer, response_mode_top_str);
 					}
-					memcpy(calendar_text_str[position], &t->value->data[j], copylen);
-					calendar_text_str[position][copylen] = '\0';
 				} else {
-					if (copylen > DATE_STRING_LENGTH-2) {
-						copylen = DATE_STRING_LENGTH-2;
+					if (title_subtitle == 0) {
+						if (copylen > CAL_TEXT_STRING_LENGTH-2) {
+							copylen = CAL_TEXT_STRING_LENGTH-2;
+						}
+						memcpy(calendar_text_str[position], &t->value->data[j], copylen);
+						calendar_text_str[position][copylen] = '\0';
+					} else {
+						if (copylen > DATE_STRING_LENGTH-2) {
+							copylen = DATE_STRING_LENGTH-2;
+						}
+						memcpy(calendar_date_str[position], &t->value->data[j], copylen);
+						calendar_date_str[position][copylen] = '\0';
 					}
-					memcpy(calendar_date_str[position], &t->value->data[j], copylen);
-					calendar_date_str[position][copylen] = '\0';
 				}
 			}
 			j += len;
 		}
 		
 		// Copy default vals in if there are not enough appts to fill
-		for (int k=(position+1); k < NUM_APPT_MODES; k++) {
-			memcpy(calendar_date_str[k], default_cal_names[0], strlen(default_cal_names[0]));
-			calendar_date_str[k][strlen(default_cal_names[0])] = '\0';
-			memcpy(calendar_text_str[k], default_cal_names[1], strlen(default_cal_names[1]));
-			calendar_text_str[k][strlen(default_cal_names[1])] = '\0';
-		}
+		if (!next_msg_has_call_sms) {
+			for (int k=(position+1); k < NUM_APPT_MODES; k++) {
+				memcpy(calendar_date_str[k], default_cal_names[0], strlen(default_cal_names[0]));
+				calendar_date_str[k][strlen(default_cal_names[0])] = '\0';
+				memcpy(calendar_text_str[k], default_cal_names[1], strlen(default_cal_names[1]));
+				calendar_text_str[k][strlen(default_cal_names[1])] = '\0';
+			}
 		
-		int oldAppt = active_appt_mode_index;
-		int oldStatusAppt = active_appt_status_mode_index;
-		active_appt_mode_index = -1;
-		active_appt_status_mode_index = -1;
-		handle_calendar_mode_click(oldAppt);
-		handle_calendar_status_mode_click(oldStatusAppt);
-	
-		// Reset into smartwatch mode to make sure we get auto updates
-		sendCommandInt(SM_SCREEN_ENTER_KEY, STATUS_SCREEN_APP);
+			int oldAppt = active_appt_mode_index;
+			int oldStatusAppt = active_appt_status_mode_index;
+			active_appt_mode_index = -1;
+			active_appt_status_mode_index = -1;
+			handle_calendar_mode_click(oldAppt);
+			handle_calendar_status_mode_click(oldStatusAppt);
+		
+			// Reset into smartwatch mode to make sure we get auto updates
+			sendCommandInt(SM_SCREEN_ENTER_KEY, STATUS_SCREEN_APP);
+		} else {
+			transition_main_layer(MUSIC_LAYER); // temp response layer
+			set_info_text_with_timer("Response Mode", response_mode_timeout);
+			responseModeTimer = app_timer_register(response_mode_timeout, dismiss_response_mode, NULL);
+			next_msg_has_call_sms = false;
+		}
+			
 	}
 
 	t = dict_find(received, SM_COUNT_MAIL_KEY);
@@ -830,6 +901,12 @@ static void rcv(DictionaryIterator *received, void *context) {
 		memcpy(sms_count_str, t->value->cstring, len);
 		sms_count_str[len] = '\0';
 		text_layer_set_text(text_sms_layer, sms_count_str);
+		
+		int cnt = atoi(sms_count_str);
+		if (cnt > prev_sms_count && prev_sms_count != -1) {
+			activate_response_mode();
+		}
+		prev_sms_count = cnt;
 	}
 
 	t = dict_find(received, SM_COUNT_PHONE_KEY);
@@ -842,6 +919,15 @@ static void rcv(DictionaryIterator *received, void *context) {
 		memcpy(phone_count_str, t->value->cstring, len);
 		phone_count_str[len] = '\0';
 		text_layer_set_text(text_phone_layer, phone_count_str);
+		
+		// Not sure how to get and display last caller yet
+		/*
+		int cnt = atoi(phone_count_str);
+		if (cnt > prev_phone_count && prev_phone_count != -1) {
+			activate_response_mode();
+		}
+		prev_phone_count = cnt;
+		*/
 	}
 
 	t = dict_find(received, SM_COUNT_BATTERY_KEY);
@@ -864,7 +950,9 @@ static void rcv(DictionaryIterator *received, void *context) {
 		
 		memcpy(music_artist_str, t->value->cstring, len);
 		music_artist_str[len] = '\0';
-		text_layer_set_text(music_artist_layer, music_artist_str);
+		
+		if (!response_mode_active)
+			text_layer_set_text(music_artist_layer, music_artist_str);
 	}
 
 	t = dict_find(received, SM_STATUS_MUS_TITLE_KEY);
@@ -876,7 +964,9 @@ static void rcv(DictionaryIterator *received, void *context) {
 		}
 		memcpy(music_title_str, t->value->cstring, len);
 		music_title_str[len] = '\0';
-		text_layer_set_text(music_song_layer, music_title_str);
+		
+		if (!response_mode_active)
+			text_layer_set_text(music_song_layer, music_title_str);
 	}
 }
 
@@ -1091,8 +1181,6 @@ static void set_info_text(int mode) {
 			set_info_text_with_timer(layer_names[active_layer], date_switchback_long);
 		}	
 	} 
-	// This causes crashing and I don't know why...
-	
 	else {
 		if (active_status_layer == CALENDAR_STATUS_LAYER) {
 			set_info_text_with_timer(appt_mode_names[active_appt_status_mode_index], date_switchback_long);
@@ -1102,6 +1190,16 @@ static void set_info_text(int mode) {
 	}
 	
 	//set_timer_for_date_recovery(date_switchback_long);
+}
+
+void dismiss_response_mode() {
+	app_timer_cancel(responseModeTimer);
+	response_mode_active = false;
+	transition_main_layer(prev_active_layer);
+	get_date_back(NULL);
+	// Restore the real music layer
+	text_layer_set_text(music_artist_layer, music_artist_str);
+	text_layer_set_text(music_song_layer, music_title_str);
 }
 
 void reset_views_and_modes()
@@ -1120,9 +1218,13 @@ void reset_views_and_modes()
 }
 
 // ===== UP ======
-
 static void up_click_handler(ClickRecognizerRef recognizer, void *context) {
-	if (active_layer == MUSIC_LAYER) {
+	if (response_mode_active) {
+		// Sends canned txt 1
+		sendCommandInt(SM_CALL_SMS_CMD_KEY, 1);	
+		dismiss_response_mode();
+		set_info_text_with_timer("SMS Response 1", date_switchback_long);
+	} else if (active_layer == MUSIC_LAYER) {
 		set_info_text_with_timer("Volume up", date_switchback_short);
 		sendCommand(SM_VOLUME_UP_KEY);
 	} else if (active_layer == MOON_LAYER) {
@@ -1138,6 +1240,8 @@ static void up_click_handler(ClickRecognizerRef recognizer, void *context) {
 }
 
 static void up_double_click_handler (ClickRecognizerRef recognizer, void *context) {
+	if (response_mode_active) return;
+	
 	if (active_status_layer == CALENDAR_STATUS_LAYER) {
 		handle_calendar_status_mode_click(NEXT_ITEM);	
 		set_info_text(BOTTOM_LAYERS);
@@ -1145,6 +1249,8 @@ static void up_double_click_handler (ClickRecognizerRef recognizer, void *contex
 }
 
 static void up_long_click_handler(ClickRecognizerRef recognizer, void *context) {
+	if (response_mode_active) return;
+	
 	if (active_layer == MUSIC_LAYER) {
 		set_info_text_with_timer("Previous track", date_switchback_short);
 		sendCommand(SM_PREVIOUS_TRACK_KEY);
@@ -1162,10 +1268,17 @@ static void up_long_click_handler(ClickRecognizerRef recognizer, void *context) 
 
 // ===== SELECT ======
 static void select_click_handler(ClickRecognizerRef recognizer, void *context) {
+	if (response_mode_active) {
+		dismiss_response_mode();
+		return;
+	}
+	
 	transition_main_layer(NEXT_ITEM);
 	set_info_text(MIDDLE_LAYERS);
 }
 static void select_long_click_handler(ClickRecognizerRef recognizer, void *context) {
+	if (response_mode_active) return;
+	
 	if (active_layer == MUSIC_LAYER) {
 		set_info_text_with_timer("Play/Pause", date_switchback_short);
 		sendCommand(SM_PLAYPAUSE_KEY);
@@ -1179,6 +1292,8 @@ static void select_long_click_handler(ClickRecognizerRef recognizer, void *conte
 
 
 static void select_double_click_handler(ClickRecognizerRef recognizer, void *context) {
+	if (response_mode_active) return;
+	
 	if (active_layer == CALENDAR_LAYER && active_status_layer == CALENDAR_STATUS_LAYER) {
 		reset_views_and_modes();			
 	} else {
@@ -1194,7 +1309,12 @@ static void select_double_click_handler(ClickRecognizerRef recognizer, void *con
 // ===== DOWN ======
 
 static void down_click_handler(ClickRecognizerRef recognizer, void *context) {
-	if (active_layer == MUSIC_LAYER) {
+	if (response_mode_active) {
+		// Sends canned txt 2
+		sendCommandInt(SM_CALL_SMS_CMD_KEY, 2);	
+		dismiss_response_mode();
+		set_info_text_with_timer("SMS Response 2", date_switchback_long);
+	} else if (active_layer == MUSIC_LAYER) {
 		set_info_text_with_timer("Volume down", date_switchback_short);
 		sendCommand(SM_VOLUME_DOWN_KEY);
 	} else {
@@ -1204,7 +1324,14 @@ static void down_click_handler(ClickRecognizerRef recognizer, void *context) {
 }
 
 static void down_long_click_handler(ClickRecognizerRef recognizer, void *context) {
-	if (active_layer == MUSIC_LAYER) {
+	if (response_mode_active) return;
+	
+	if (response_mode_active) {
+		// Sends canned txt 2
+		sendCommandInt(SM_CALL_SMS_CMD_KEY, 2);	
+		dismiss_response_mode();
+		set_info_text_with_timer("SMS Response 2", date_switchback_long);
+	} else if (active_layer == MUSIC_LAYER) {
 		set_info_text_with_timer("Next track", date_switchback_short);
 		sendCommand(SM_NEXT_TRACK_KEY);
 	} else {
@@ -1213,6 +1340,8 @@ static void down_long_click_handler(ClickRecognizerRef recognizer, void *context
 }
 
 static void down_double_click_handler(ClickRecognizerRef recognizer, void *context) {
+	if (response_mode_active) return;
+	
 	transition_main_layer(MUSIC_LAYER);
 	set_info_text(MIDDLE_LAYERS);
 }
@@ -1536,9 +1665,6 @@ static void init(void) {
 	
 	calendar_text_layer2 = text_layer_create(GRect(6, 13, 132, 28));
 	text_layer_setup(status_layer[CALENDAR_STATUS_LAYER], calendar_text_layer2, GTextAlignmentLeft, textColor, FONT_KEY_GOTHIC_24_BOLD, default_cal_names[1]);
-	
-	
-	
 	
 	if (bluetooth_connection_service_peek()) {
 		weather_img = 0;
