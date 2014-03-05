@@ -39,6 +39,7 @@ static int prev_call_count = -1;
 static int prev_active_layer = -1;
 static bool next_msg_has_call_sms = false;
 static int response_mode_timeout = 90000; // 90 sec
+//static int wait_for_msg_app_mode = 0;
 
 static const int NEXT_ITEM = -1;
 static const int MIDDLE_LAYERS = 0;
@@ -65,6 +66,7 @@ static int last_humidity_img_set = HUM_50;
 
 static AppTimer* dateRecoveryTimer = NULL;
 static AppTimer* responseModeTimer = NULL;
+//static AppTimer* statusModeTimer = NULL;
 static int date_switchback_short = 2000;
 static int date_switchback_long = 5000;
 
@@ -602,6 +604,10 @@ static void activate_response_mode() {
 	sendCommandInt(SM_SCREEN_ENTER_KEY, MESSAGES_APP);
 }
 
+//static void set_status_app_as_active(void *data) {
+//	sendCommandInt(SM_SCREEN_ENTER_KEY, STATUS_SCREEN_APP);
+//}
+
 //======================================================================================================
 // RECEIVE FUNCTIONS
 //======================================================================================================
@@ -772,7 +778,10 @@ static void rcv(DictionaryIterator *received, void *context) {
 		weather_wind_str[newStrIdx] = '\0';
 		text_layer_set_text(text_weather_wind_layer, weather_wind_str);
 		
+		// Switch to calendar mode... sometimes, this may not respond, 
+		// so always make sure we get back into status mode
 		sendCommandInt(SM_SCREEN_ENTER_KEY, CALENDAR_APP);
+		//statusModeTimer = app_timer_register(10000, set_status_app_as_active, NULL);
 	}
 	
 	
@@ -795,7 +804,14 @@ static void rcv(DictionaryIterator *received, void *context) {
 
 	t = dict_find(received, SM_CALENDAR_UPDATE_KEY);
 	if (t != NULL) {
-		APP_LOG(APP_LOG_LEVEL_DEBUG, "CAL_KEY VALID");
+		//APP_LOG(APP_LOG_LEVEL_DEBUG, "CAL_KEY VALID");
+		// Maybe we need this?
+		//if (wait_for_msg_app_mode > 0) {
+		//	sendCommandInt(SM_CALL_SMS_CMD_KEY, wait_for_msg_app_mode);
+		//	wait_for_msg_app_mode = 0;
+		//	return;
+		//}
+		
 		uint8_t number_entries = t->value->data[0];
 		uint8_t position = 0;
 		uint8_t title_subtitle = 0;
@@ -867,6 +883,7 @@ static void rcv(DictionaryIterator *received, void *context) {
 			handle_calendar_status_mode_click(oldStatusAppt);
 		
 			// Reset into smartwatch mode to make sure we get auto updates
+			//app_timer_cancel(statusModeTimer);
 			sendCommandInt(SM_SCREEN_ENTER_KEY, STATUS_SCREEN_APP);
 		} else {
 			transition_main_layer(MUSIC_LAYER); // temp response layer
@@ -1221,9 +1238,11 @@ void reset_views_and_modes()
 static void up_click_handler(ClickRecognizerRef recognizer, void *context) {
 	if (response_mode_active) {
 		// Sends canned txt 1
-		sendCommandInt(SM_CALL_SMS_CMD_KEY, 1);	
+		//wait_for_msg_app_mode = 1;
+		//sendCommandInt(SM_SCREEN_ENTER_KEY, MESSAGES_APP);
+		sendCommandInt(SM_CALL_SMS_CMD_KEY, 1);
 		dismiss_response_mode();
-		set_info_text_with_timer("SMS Response 1", date_switchback_long);
+		set_info_text_with_timer("Sent SMS 1", date_switchback_long);
 	} else if (active_layer == MUSIC_LAYER) {
 		set_info_text_with_timer("Volume up", date_switchback_short);
 		sendCommand(SM_VOLUME_UP_KEY);
@@ -1311,9 +1330,11 @@ static void select_double_click_handler(ClickRecognizerRef recognizer, void *con
 static void down_click_handler(ClickRecognizerRef recognizer, void *context) {
 	if (response_mode_active) {
 		// Sends canned txt 2
-		sendCommandInt(SM_CALL_SMS_CMD_KEY, 2);	
+		//wait_for_msg_app_mode = 2;
+		//sendCommandInt(SM_SCREEN_ENTER_KEY, MESSAGES_APP);
+		sendCommandInt(SM_CALL_SMS_CMD_KEY, 2);
 		dismiss_response_mode();
-		set_info_text_with_timer("SMS Response 2", date_switchback_long);
+		set_info_text_with_timer("Sent SMS 2", date_switchback_long);
 	} else if (active_layer == MUSIC_LAYER) {
 		set_info_text_with_timer("Volume down", date_switchback_short);
 		sendCommand(SM_VOLUME_DOWN_KEY);
