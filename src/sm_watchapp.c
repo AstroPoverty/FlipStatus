@@ -37,7 +37,7 @@ static bool response_mode_active = false;
 static int prev_sms_count = -1;
 static int prev_call_count = -1;
 static int prev_active_layer = -1;
-static bool next_msg_has_call_sms = false;
+static int data_mode = STATUS_SCREEN_APP;
 static int response_mode_timeout = 90000; // 90 sec
 //static int wait_for_msg_app_mode = 0;
 
@@ -335,6 +335,7 @@ void data_update_and_refresh() {
 	// This is a hack.  When you query the weather for humidity and wind, those tuple
 	// vals will in turn send out a normal SS messgae for update.  You can't send two at the same time,
 	// so this is hopefully a temporary hack.
+	data_mode = WEATHER_APP;
 	sendCommandInt(SM_SCREEN_ENTER_KEY, WEATHER_APP);
 	//sendCommandInt(SM_SCREEN_ENTER_KEY, MESSAGES_APP);
 	//APP_LOG(APP_LOG_LEVEL_DEBUG, "MESSAGES_APP SENT...");
@@ -599,8 +600,8 @@ void setWindImage() {
 
 static void activate_response_mode() {
 	prev_active_layer = active_layer;
-	next_msg_has_call_sms = true;
 	response_mode_active = true;
+	data_mode = MESSAGES_APP;
 	sendCommandInt(SM_SCREEN_ENTER_KEY, MESSAGES_APP);
 }
 
@@ -780,6 +781,7 @@ static void rcv(DictionaryIterator *received, void *context) {
 		
 		// Switch to calendar mode... sometimes, this may not respond, 
 		// so always make sure we get back into status mode
+		data_mode = CALENDAR_APP;
 		sendCommandInt(SM_SCREEN_ENTER_KEY, CALENDAR_APP);
 		//statusModeTimer = app_timer_register(10000, set_status_app_as_active, NULL);
 	}
@@ -821,7 +823,7 @@ static void rcv(DictionaryIterator *received, void *context) {
 		uint8_t iterCnt = NUM_APPT_MODES;
 		int j = 1;
 		
-		if (next_msg_has_call_sms)
+		if (data_mode == MESSAGES_APP)
 			iterCnt = 1;
 
 		while (j < t->length) {
@@ -831,7 +833,7 @@ static void rcv(DictionaryIterator *received, void *context) {
 			copylen = len;
 
 			if (position < iterCnt) {
-				if (next_msg_has_call_sms) {
+				if (data_mode == MESSAGES_APP) {
 					if (title_subtitle == 0) {
 						if (copylen > MUSIC_TEXT_STRING_LENGTH-2) {
 							copylen = MUSIC_TEXT_STRING_LENGTH-2;
@@ -867,7 +869,7 @@ static void rcv(DictionaryIterator *received, void *context) {
 		}
 		
 		// Copy default vals in if there are not enough appts to fill
-		if (!next_msg_has_call_sms) {
+		if (data_mode != MESSAGES_APP) {
 			for (int k=(position+1); k < NUM_APPT_MODES; k++) {
 				memcpy(calendar_date_str[k], default_cal_names[0], strlen(default_cal_names[0]));
 				calendar_date_str[k][strlen(default_cal_names[0])] = '\0';
@@ -884,12 +886,12 @@ static void rcv(DictionaryIterator *received, void *context) {
 		
 			// Reset into smartwatch mode to make sure we get auto updates
 			//app_timer_cancel(statusModeTimer);
+			data_mode = STATUS_SCREEN_APP;
 			sendCommandInt(SM_SCREEN_ENTER_KEY, STATUS_SCREEN_APP);
 		} else {
 			transition_main_layer(MUSIC_LAYER); // temp response layer
 			set_info_text_with_timer("Response Mode", response_mode_timeout);
 			responseModeTimer = app_timer_register(response_mode_timeout, dismiss_response_mode, NULL);
-			next_msg_has_call_sms = false;
 		}
 			
 	}
@@ -921,7 +923,7 @@ static void rcv(DictionaryIterator *received, void *context) {
 		
 		int cnt = atoi(sms_count_str);
 		if (cnt > prev_sms_count && prev_sms_count != -1) {
-			activate_response_mode();
+			//activate_response_mode();
 		}
 		prev_sms_count = cnt;
 	}
@@ -1217,6 +1219,9 @@ void dismiss_response_mode() {
 	// Restore the real music layer
 	text_layer_set_text(music_artist_layer, music_artist_str);
 	text_layer_set_text(music_song_layer, music_title_str);
+	
+	data_mode = STATUS_SCREEN_APP;
+	sendCommandInt(SM_SCREEN_ENTER_KEY, STATUS_SCREEN_APP);
 }
 
 void reset_views_and_modes()
