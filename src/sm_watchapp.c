@@ -404,11 +404,8 @@ void handle_minute_tick(struct tm *tick_time, TimeUnits units_changed) {
 
 static int get_weather_image_index(int index, int condIndx) {
 	int wImg = index;
-	/*
-	if (strcmp(weather_cond_str[condIndx], "Clear") == 0) {
-		wImg = 8;
-	}*/
-	if (wImg == 0) { // Sum icon
+	
+	if (wImg == 0) { // Sun icon
 		if (!isDay()) {
 			wImg = 8;
 		}
@@ -704,7 +701,12 @@ static void rcv(DictionaryIterator *received, void *context) {
 		
 		memcpy(weather_cond_str[WEATHER_CURRENT], t->value->cstring, len);
 		weather_cond_str[WEATHER_CURRENT][len] = '\0';
-		text_layer_set_text(text_weather_cond_layer, weather_cond_str[WEATHER_CURRENT]);
+		if (strcmp( weather_cond_str[WEATHER_CURRENT], "Sunny") == 0) {
+			text_layer_set_text(text_weather_cond_layer, weather_conditions[0]); 
+		} else {
+			text_layer_set_text(text_weather_cond_layer, weather_cond_str[WEATHER_CURRENT]);	
+		}
+		
 		text_layer_set_text(text_weather_hi_lo_label_layer, p_weather_hi_lo_str[WEATHER_CURRENT]);
 	}
 
@@ -907,7 +909,7 @@ static void rcv(DictionaryIterator *received, void *context) {
 				calendar_text_str[k][strlen(default_cal_names[1])] = '\0';
 			}
 			*/
-			actual_num_appt_modes = position;
+			actual_num_appt_modes = position < NUM_APPT_MODES ? position : NUM_APPT_MODES;
 			int oldAppt = active_appt_mode_index;
 			int oldStatusAppt = active_appt_status_mode_index;
 			active_appt_mode_index = -1;
@@ -954,7 +956,7 @@ static void rcv(DictionaryIterator *received, void *context) {
 		
 		int cnt = atoi(sms_count_str);
 		if (cnt > prev_sms_count && prev_sms_count != -1) {
-			activate_response_mode();
+			//activate_response_mode();
 		}
 		prev_sms_count = cnt;
 	}
