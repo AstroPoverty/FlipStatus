@@ -107,6 +107,7 @@ static char calendar_text_str[NUM_APPT_MODES][CAL_TEXT_STRING_LENGTH], calendar_
 static char old_date_str[DATE_STRING_LENGTH];
 static char music_artist_str[MUSIC_TEXT_STRING_LENGTH], music_title_str[MUSIC_TEXT_STRING_LENGTH];
 static char response_mode_top_str[MUSIC_TEXT_STRING_LENGTH], response_mode_bottom_str[MUSIC_TEXT_STRING_LENGTH];
+static int actual_num_appt_modes = NUM_APPT_MODES;
 
 static bool color_mode_normal = true;
 
@@ -862,6 +863,34 @@ static void rcv(DictionaryIterator *received, void *context) {
 						}
 						memcpy(calendar_date_str[position], &t->value->data[j], copylen);
 						calendar_date_str[position][copylen] = '\0';
+						
+						time_t tt = time(NULL);
+						struct tm * tm_now = localtime(&tt);
+						
+						// US Dates MM/DD
+						char curDate[6];
+						snprintf(curDate, 6, "%02d/%02d", tm_now->tm_mon+1, tm_now->tm_mday);
+						int strLenDt = 5;						
+						
+						// DD/MM format
+						//char curDate[6];
+						//snprintf(curDate, 6, "%02d/%02d", tm_now->tm_mday, tm_now->tm_mon+1);
+						//int strLenDt = 5;
+						
+						// DD.MM. format
+						//char curDate[7];
+						//snprintf(curDate, 7, "%02d.%02d.", tm_now->tm_mday, tm_now->tm_mon+1);
+						//int strLenDt = 6;
+						
+						calendar_date_str[position][strLenDt] = '\0';
+						
+						if (strcmp(curDate, calendar_date_str[position]) == 0)
+						{
+							memmove(&calendar_date_str[position][0], &calendar_date_str[position][strLenDt+1], copylen-(strLenDt+1));
+							calendar_date_str[position][copylen-(strLenDt+1)] = '\0';
+						} else {
+							calendar_date_str[position][strLenDt] = ' ';	
+						} 
 					}
 				}
 			}
@@ -870,13 +899,15 @@ static void rcv(DictionaryIterator *received, void *context) {
 		
 		// Copy default vals in if there are not enough appts to fill
 		if (data_mode != MESSAGES_APP) {
+			/*
 			for (int k=(position+1); k < NUM_APPT_MODES; k++) {
 				memcpy(calendar_date_str[k], default_cal_names[0], strlen(default_cal_names[0]));
 				calendar_date_str[k][strlen(default_cal_names[0])] = '\0';
 				memcpy(calendar_text_str[k], default_cal_names[1], strlen(default_cal_names[1]));
 				calendar_text_str[k][strlen(default_cal_names[1])] = '\0';
 			}
-		
+			*/
+			actual_num_appt_modes = position;
 			int oldAppt = active_appt_mode_index;
 			int oldStatusAppt = active_appt_status_mode_index;
 			active_appt_mode_index = -1;
@@ -923,7 +954,7 @@ static void rcv(DictionaryIterator *received, void *context) {
 		
 		int cnt = atoi(sms_count_str);
 		if (cnt > prev_sms_count && prev_sms_count != -1) {
-			//activate_response_mode();
+			activate_response_mode();
 		}
 		prev_sms_count = cnt;
 	}
@@ -1057,14 +1088,15 @@ static void toggle_themes()
 // BUTTON HANDLERS
 //======================================================================================================
 
+
 static void transition_main_layer(int view) {
 	if (view == active_layer) {
 		return;
 	}
 
 	if (ani_in != NULL) {
-		animation_destroy((Animation*)ani_in);
-		animation_destroy((Animation*)ani_out);	
+		property_animation_destroy(ani_in);
+		property_animation_destroy(ani_out);	
 	}
 		
 	ani_out = property_animation_create_layer_frame(animated_layer[active_layer], &GRect(0, 77, 144, 45), &GRect(-144, 77, 144, 45));
@@ -1089,8 +1121,8 @@ static void transition_status_layer(int view) {
 	}
 
 	if (ani_in_status != NULL) {
-		animation_destroy((Animation*)ani_in_status);
-		animation_destroy((Animation*)ani_out_status);	
+		property_animation_destroy(ani_in_status);
+		property_animation_destroy(ani_out_status);	
 	}
 	
 	
@@ -1157,7 +1189,7 @@ static void handle_calendar_mode_click(int mode) {
 	} else if (mode >= 0) {
 		active_appt_mode_index = mode;
 	} else {
-		active_appt_mode_index = (active_appt_mode_index + 1) % (NUM_APPT_MODES);
+		active_appt_mode_index = (active_appt_mode_index + 1) % (actual_num_appt_modes);
 	}
 	
 	text_layer_set_text(calendar_text_layer1, calendar_text_str[active_appt_mode_index]);
@@ -1171,7 +1203,7 @@ static void handle_calendar_status_mode_click(int mode) {
 	} else if (mode >= 0) {
 		active_appt_status_mode_index = mode;
 	} else {
-		active_appt_status_mode_index = (active_appt_status_mode_index + 1) % (NUM_APPT_MODES);
+		active_appt_status_mode_index = (active_appt_status_mode_index + 1) % (actual_num_appt_modes);
 	}
 	
 	text_layer_set_text(calendar_text_layer2, calendar_text_str[active_appt_status_mode_index]);
@@ -1781,8 +1813,8 @@ static void init(void) {
 
 
 static void deinit(void) {
-	animation_destroy((Animation*)ani_in);
-	animation_destroy((Animation*)ani_out);
+	//animation_destroy((Animation*)ani_in);
+	//animation_destroy((Animation*)ani_out);
 	animation_destroy((Animation*)ani_in_status);
 	animation_destroy((Animation*)ani_out_status);
 
