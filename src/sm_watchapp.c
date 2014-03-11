@@ -207,6 +207,7 @@ static void handle_calendar_mode_click(int);
 static void handle_calendar_status_mode_click(int);
 void set_moon_data();
 void dismiss_response_mode();
+static void handle_weather_mode_click(int);
 static void deinit();
 static void init();
 
@@ -292,13 +293,16 @@ static bool isDay() {
 void get_date_back(void *data) {
 	dateRecoveryTimer = NULL;
 	text_layer_set_text(text_date_layer, old_date_str);
+	
+	handle_weather_mode_click(WEATHER_CURRENT);
 }
 
 void set_timer_for_date_recovery(int time_len) {
-	if (dateRecoveryTimer != NULL)
+	if (dateRecoveryTimer != NULL) {
 		app_timer_reschedule(dateRecoveryTimer, time_len);
-	else
+	} else {
 		dateRecoveryTimer = app_timer_register(time_len, get_date_back, NULL);
+	}
 }
 
 void reset_sequence_number() {
@@ -701,7 +705,7 @@ static void rcv(DictionaryIterator *received, void *context) {
 		
 		memcpy(weather_cond_str[WEATHER_CURRENT], t->value->cstring, len);
 		weather_cond_str[WEATHER_CURRENT][len] = '\0';
-		if (strcmp( weather_cond_str[WEATHER_CURRENT], "Sunny") == 0) {
+		if (!isDay() && strcmp( weather_cond_str[WEATHER_CURRENT], "Sunny") == 0) {
 			text_layer_set_text(text_weather_cond_layer, weather_conditions[0]); 
 		} else {
 			text_layer_set_text(text_weather_cond_layer, weather_cond_str[WEATHER_CURRENT]);	
@@ -870,24 +874,24 @@ static void rcv(DictionaryIterator *received, void *context) {
 						struct tm * tm_now = localtime(&tt);
 						
 						// US Dates MM/DD
-						char curDate[6];
-						snprintf(curDate, 6, "%02d/%02d", tm_now->tm_mon+1, tm_now->tm_mday);
-						int strLenDt = 5;						
+						char curDates[1][7];
+						snprintf(curDates[0], 6, "%02d/%02d", tm_now->tm_mon+1, tm_now->tm_mday);
 						
 						// DD/MM format
-						//char curDate[6];
-						//snprintf(curDate, 6, "%02d/%02d", tm_now->tm_mday, tm_now->tm_mon+1);
-						//int strLenDt = 5;
-						
+						//snprintf(curDates[0], 6, "%02d/%02d", tm_now->tm_mday, tm_now->tm_mon+1);
+																		
 						// DD.MM. format
-						//char curDate[7];
-						//snprintf(curDate, 7, "%02d.%02d.", tm_now->tm_mday, tm_now->tm_mon+1);
-						//int strLenDt = 6;
+						//snprintf(curDates[0], 7, "%02d.%02d.", tm_now->tm_mday, tm_now->tm_mon+1);
 						
+						int strLenDt = 5;
+						int idx = 0;
+						if (strcmp(curDates[0], calendar_date_str[position]) == 0) {
+							strLenDt = 5;
+							idx = 0;
+						}						
 						calendar_date_str[position][strLenDt] = '\0';
 						
-						if (strcmp(curDate, calendar_date_str[position]) == 0)
-						{
+						if (strcmp(curDates[idx], calendar_date_str[position]) == 0) {
 							memmove(&calendar_date_str[position][0], &calendar_date_str[position][strLenDt+1], copylen-(strLenDt+1));
 							calendar_date_str[position][copylen-(strLenDt+1)] = '\0';
 						} else {
@@ -1220,7 +1224,7 @@ static void set_info_text_with_timer(char * txt, int time) {
 static void set_info_text(int mode) {
 	if (mode == 0) {
 		if (active_layer == WEATHER_LAYER) {
-			set_info_text_with_timer(weather_mode_names[active_weather_mode_index], date_switchback_long);
+			set_info_text_with_timer(weather_mode_names[active_weather_mode_index], date_switchback_long * 2);
 		} else if (active_layer == MOON_LAYER) {
 			if (active_moon_mode_index == 0) {
 				set_info_text_with_timer(moon_mode_names[0], date_switchback_long);	
