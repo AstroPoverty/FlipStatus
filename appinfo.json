@@ -78,17 +78,17 @@
             },
             {
                 "type": "png",
-                "name": "IMAGE_MOON_WANING_CRESCENT",
+                "name": "IMAGE_MOON_WANING_GIB",
                 "file": "images/moon_waning_crescent.png"
             },
             {
                 "type": "png",
-                "name": "IMAGE_MOON_LAST_QTR",
+                "name": "IMAGE_MOON_FIRST_QTR",
                 "file": "images/moon_last_qtr.png"
             },
             {
                 "type": "png",
-                "name": "IMAGE_MOON_WANING_GIB",
+                "name": "IMAGE_MOON_WANING_CRESCENT",
                 "file": "images/moon_waning_gibbous.png"
             },
             {
@@ -98,17 +98,17 @@
             },
             {
                 "type": "png",
-                "name": "IMAGE_MOON_WAXING_GIB",
+                "name": "IMAGE_MOON_WAXING_CRESCENT",
                 "file": "images/moon_waxing_gibbous.png"
             },
             {
                 "type": "png",
-                "name": "IMAGE_MOON_FIRST_QTR",
+                "name": "IMAGE_MOON_LAST_QTR",
                 "file": "images/moon_first_qtr.png"
             },
             {
                 "type": "png",
-                "name": "IMAGE_MOON_WAXING_CRESCENT",
+                "name": "IMAGE_MOON_WAXING_GIB",
                 "file": "images/moon_waxing_crescent.png"
             },
             {
