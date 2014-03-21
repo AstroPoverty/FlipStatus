@@ -66,7 +66,6 @@ static int last_humidity_img_set = HUM_50;
 
 static AppTimer* dateRecoveryTimer = NULL;
 static AppTimer* responseModeTimer = NULL;
-//static AppTimer* statusModeTimer = NULL;
 static int date_switchback_short = 2000;
 static int date_switchback_long = 5000;
 
@@ -335,12 +334,17 @@ void sendCommandInt(int key, int param) {
 	//APP_LOG(APP_LOG_LEVEL_DEBUG, "app_message_outbox_send");
 }
 
+static void set_status_app_as_active(void *data) {
+	sendCommandInt(SM_SCREEN_ENTER_KEY, STATUS_SCREEN_APP);
+}
+
 void data_update_and_refresh() {
 	// This is a hack.  When you query the weather for humidity and wind, those tuple
 	// vals will in turn send out a normal SS messgae for update.  You can't send two at the same time,
 	// so this is hopefully a temporary hack.
 	data_mode = WEATHER_APP;
 	sendCommandInt(SM_SCREEN_ENTER_KEY, WEATHER_APP);
+	app_timer_register(20000, set_status_app_as_active, NULL);
 	//sendCommandInt(SM_SCREEN_ENTER_KEY, MESSAGES_APP);
 	//APP_LOG(APP_LOG_LEVEL_DEBUG, "MESSAGES_APP SENT...");
 }
@@ -606,9 +610,7 @@ static void activate_response_mode() {
 	sendCommandInt(SM_SCREEN_ENTER_KEY, MESSAGES_APP);
 }
 
-//static void set_status_app_as_active(void *data) {
-//	sendCommandInt(SM_SCREEN_ENTER_KEY, STATUS_SCREEN_APP);
-//}
+
 
 //======================================================================================================
 // RECEIVE FUNCTIONS
@@ -789,7 +791,6 @@ static void rcv(DictionaryIterator *received, void *context) {
 		// so always make sure we get back into status mode
 		data_mode = CALENDAR_APP;
 		sendCommandInt(SM_SCREEN_ENTER_KEY, CALENDAR_APP);
-		//statusModeTimer = app_timer_register(10000, set_status_app_as_active, NULL);
 	}
 	
 	
