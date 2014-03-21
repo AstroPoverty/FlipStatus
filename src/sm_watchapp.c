@@ -82,7 +82,7 @@ static TextLayer *calendar_date_layer2, *calendar_text_layer2;
 static TextLayer *music_artist_layer, *music_song_layer;
 
 static Layer *battery_layer, *pebble_battery_layer;
-static BitmapLayer *background_image, *weather_image, *moon_image, *status_image, *wind_image, *humidity_image, *weather_day2_image, *weather_day3_image;
+static BitmapLayer *background_image, *weather_image, *moon_image, *status_image, *wind_image, *humidity_image;
 
 static Layer *status_layer[NUM_STATUS_LAYERS], *animated_layer[NUM_LAYERS];
 
@@ -117,8 +117,7 @@ GBitmap *current_weather_image;
 GBitmap *current_moon_image;
 GBitmap *current_wind_image;
 GBitmap *current_humidity_image;
-GBitmap *current_weather_day2_image;
-GBitmap *current_weather_day3_image;
+
 
 const int INTERNAL_UPDATE_TIME = 20;
 static int current_update_min_hits = 0;
@@ -1819,8 +1818,8 @@ static void init(void) {
 
 
 static void deinit(void) {
-	//animation_destroy((Animation*)ani_in);
-	//animation_destroy((Animation*)ani_out);
+	animation_destroy((Animation*)ani_in);
+	animation_destroy((Animation*)ani_out);
 	animation_destroy((Animation*)ani_in_status);
 	animation_destroy((Animation*)ani_out_status);
 
@@ -1858,9 +1857,7 @@ static void deinit(void) {
 	bitmap_layer_destroy(status_image);
 	bitmap_layer_destroy(wind_image);
 	bitmap_layer_destroy(humidity_image);
-	bitmap_layer_destroy(weather_day2_image);
-	bitmap_layer_destroy(weather_day3_image);
-
+	
 	for (int i = 0; i<NUM_STATUS_LAYERS; i++) {
 		layer_destroy(status_layer[i]);
 	}
@@ -1874,8 +1871,6 @@ static void deinit(void) {
 	gbitmap_destroy(current_status_image);
 	gbitmap_destroy(current_wind_image);
 	gbitmap_destroy(current_humidity_image);
-	gbitmap_destroy(current_weather_day2_image);
-	gbitmap_destroy(current_weather_day3_image);
 	gbitmap_destroy(bg_image);
 
 	tick_timer_service_unsubscribe();
